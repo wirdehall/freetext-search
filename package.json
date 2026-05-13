@@ -7,7 +7,12 @@
   "keywords": ["search", "freetext", "filter", "typescript", "react"],
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "https://github.com/wirdehall/freetext-search"
+  },
+  "author": "Wirdehall (https://github.com/wirdehall)",
+  "homepage": "https://github.com/wirdehall/freetext-search#readme",
+  "bugs": {
+    "url": "https://github.com/wirdehall/freetext-search/issues"
   },
   "sideEffects": false,
   "files": ["dist"],
@@ -49,6 +54,7 @@
   },
   "scripts": {
     "build": "tsdown",
+    "prepublishOnly": "npm run build",
     "build:demos": "npm run build --workspaces --if-present",
     "dev:demo:core": "npm run dev --workspace=demos/core",
     "dev:demo:react": "npm run dev --workspace=demos/react"
