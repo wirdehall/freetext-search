@@ -2,16 +2,6 @@ import { useState, useEffect } from 'react';
 import { useFreetextFilter } from 'freetext-search/react';
 import Table from '../components/table';
 
-const steamColumnsToInclude: string[] = [
-  'game_id', 'title', 'release_date', 'all_genres', 'theme', 'art_style', 
-  'view_dimension', 'game_mode', 'controls', 'user_rating'
-];
-
-const steamColumsToIncludeIndex = steamColumnsToInclude.reduce<Record<string, boolean>>((acc, col) => {
-  acc[col] = true; 
-  return acc; 
-}, {});
-
 const steamColumnTranslations: Record<string, string> = {
   'game_id': 'Id',
   'title': 'Title',
@@ -25,17 +15,6 @@ const steamColumnTranslations: Record<string, string> = {
   'user_rating': 'Rating'
 }
 
-
-const dotaColumnsToInclude: string[] = [
-  'game_id', 'tournament_en', 'team1', 'team2', 'score1', 'score2', 
-  'team1_win', 'bestOf', 'games_played', 'datetime'
-];
-
-const dotaColumsToIncludeIndex = dotaColumnsToInclude.reduce<Record<string, boolean>>((acc, col) => {
-  acc[col] = true; 
-  return acc; 
-}, {});
-
 const dotaColumnTranslations: Record<string, string> = {
   'game_id': 'Id',
   'tournament_en': 'Tournament',
@@ -48,7 +27,6 @@ const dotaColumnTranslations: Record<string, string> = {
   'games_played': '# games',
   'datetime': 'When'
 }
-
 
 function parseRow(line: string): string[] {
   const fields: string[] = []
@@ -91,21 +69,13 @@ export default function BigDataset({ dataset }: Params) {
       })
       .then(text => {
         const parsed = parseCsv(text);
+        setColumns(Object.keys(parsed[0]));
         if(dataset === 'steam') {
-          setColumns(steamColumnsToInclude);
           setColumnsTranslation(steamColumnTranslations);
         } else {
-          setColumns(dotaColumnsToInclude);
           setColumnsTranslation(dotaColumnTranslations);
         }
-        const includeIndex = dataset === 'dota' ? dotaColumsToIncludeIndex : steamColumsToIncludeIndex;
-        const filteredRows = parsed.map((row) => Object.entries(row).reduce<Record<string, string>>((acc, [key, val]) => {
-          if(includeIndex[key]) {
-            acc[key] = val;
-          }
-          return acc;
-        }, {}));
-        setRows(filteredRows);
+        setRows(parsed);
         setLoading(false);
       })
       .catch(err => {

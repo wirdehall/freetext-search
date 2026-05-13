@@ -22,7 +22,7 @@ const extractNumbers = (str: string, startAnchor: boolean, endAnchor: boolean): 
   return (str.match(pattern) ?? []).map(Number);
 };
 
-const parseRangeTokens = (filterText: string): {
+const parseRangeTokens = (filterText: string, longForm: boolean, shortForm: boolean): {
   remaining: string;
   inclusionRanges: RangeFilter[];
   exclusionRanges: RangeFilter[];
@@ -30,7 +30,18 @@ const parseRangeTokens = (filterText: string): {
   const inclusionRanges: RangeFilter[] = [];
   const exclusionRanges: RangeFilter[] = [];
 
-  const remaining = filterText.replace(/(!?)(@start:)?(\[.*?\])(:@end)?/g, (fullMatch, bang, startPrefix, bracket, endSuffix) => {
+  const startParts: string[] = [];
+  if (longForm) startParts.push('@start:');
+  if (shortForm) startParts.push('@:');
+  const endParts: string[] = [];
+  if (longForm) endParts.push(':@end');
+  if (shortForm) endParts.push(':@');
+
+  const startGroup = startParts.length > 0 ? `(${startParts.join('|')})?` : '()';
+  const endGroup = endParts.length > 0 ? `(${endParts.join('|')})?` : '()';
+  const pattern = new RegExp(`(!?)${startGroup}(\\[.*?\\])${endGroup}`, 'g');
+
+  const remaining = filterText.replace(pattern, (fullMatch, bang, startPrefix, bracket, endSuffix) => {
     const inner = bracket.slice(1, -1);
     const parts = inner.split(':');
     if (parts.length !== 2) return fullMatch;
@@ -40,8 +51,8 @@ const parseRangeTokens = (filterText: string): {
     const filter: RangeFilter = {
       lower,
       upper,
-      startAnchor: startPrefix === '@start:',
-      endAnchor: endSuffix === ':@end',
+      startAnchor: !!startPrefix,
+      endAnchor: !!endSuffix,
     };
     (bang === '!' ? exclusionRanges : inclusionRanges).push(filter);
     return '';
@@ -74,7 +85,7 @@ export const freetextFilterByIndex = <T>(
   options?: FreetextFilterOptions,
 ) => {
   const { ignoreCharactersRegex, longForm, shortForm } = options ?? {};
-  const { remaining, inclusionRanges, exclusionRanges } = parseRangeTokens(filterText);
+  const { remaining, inclusionRanges, exclusionRanges } = parseRangeTokens(filterText, longForm ?? true, shortForm ?? false);
   const cleanedFilterText = remaining.toLowerCase().trim();
   const filterTextCheckingForStartAndFinish = convertStartAndEndShorthands(
     cleanedFilterText, 

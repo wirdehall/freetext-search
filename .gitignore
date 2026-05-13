@@ -1,4 +1,5 @@
 node_modules/
 dist/
-demos/react/public/*
+demos/react/public/data/dota_games_original.csv
+demos/react/public/data/steam_dataset_original.csv
 CLAUDE.md
