@@ -4,10 +4,16 @@
   "description": "Fast, lightweight freetext search with zero external dependencies",
   "license": "MIT",
   "type": "module",
-  "keywords": ["search", "freetext", "filter", "typescript", "react"],
+  "keywords": [
+    "search",
+    "freetext",
+    "filter",
+    "typescript",
+    "react"
+  ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/wirdehall/freetext-search"
+    "url": "git+https://github.com/wirdehall/freetext-search.git"
   },
   "author": "Wirdehall (https://github.com/wirdehall)",
   "homepage": "https://github.com/wirdehall/freetext-search#readme",
@@ -15,7 +21,9 @@
     "url": "https://github.com/wirdehall/freetext-search/issues"
   },
   "sideEffects": false,
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.cts",
@@ -45,7 +53,9 @@
     "react": ">=17"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true }
+    "react": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/react": "^18.0.0",
@@ -62,5 +72,7 @@
   "engines": {
     "node": ">=24"
   },
-  "workspaces": ["demos/*"]
+  "workspaces": [
+    "demos/*"
+  ]
 }
