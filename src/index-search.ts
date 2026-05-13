@@ -34,8 +34,8 @@ const parseRangeTokens = (filterText: string): {
     const inner = bracket.slice(1, -1);
     const parts = inner.split(':');
     if (parts.length !== 2) return fullMatch;
-    const lower = Number(parts[0].replace(/-/g, ''));
-    const upper = Number(parts[1].replace(/-/g, ''));
+    const lower = Number(parts[0].replace(/(\d)-/g, '$1'));
+    const upper = Number(parts[1].replace(/(\d)-/g, '$1'));
     if (isNaN(lower) || isNaN(upper)) return fullMatch;
     const filter: RangeFilter = {
       lower,

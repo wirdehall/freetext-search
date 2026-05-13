@@ -26,17 +26,20 @@ export const buildIndex = <K extends string = never, T extends RowDef<K> = RowDe
   return index;
 }
 
+const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 export const getCharactersToIgnoreFunctionAndRegex = (charactersToIgnore?: string) => {
   if(charactersToIgnore === undefined) {
     return { ignoreCharactersFunction: (colString: string) => colString, ignoreCharactersRegex: undefined };
   } else if(charactersToIgnore.includes('|')) {
-    const regex = new RegExp("(" + charactersToIgnore + ")", "g");
+    const escaped = charactersToIgnore.split('|').map(escapeRegex).join('|');
+    const regex = new RegExp("(" + escaped + ")", "g");
     return {
       ignoreCharactersFunction: (colString: string) => colString.replace(regex, ''),
       ignoreCharactersRegex: regex
     };
   } else {
-    const regex = new RegExp(charactersToIgnore, "g");
+    const regex = new RegExp(escapeRegex(charactersToIgnore), "g");
     return {
       ignoreCharactersFunction: (colString: string) => colString.replace(regex, ''),
       ignoreCharactersRegex: regex

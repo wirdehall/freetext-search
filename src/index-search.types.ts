@@ -5,7 +5,7 @@ export type Primitive = string | number | boolean | null;
 export type RowDef<K extends string = never> = Readonly<Record<string,
   [K] extends [never] ? Primitive : Primitive | Record<K, Primitive>
 >>;
-export type FreextextFilterHookOptions<K extends string = never> = Readonly<{
+export type FreetextFilterHookOptions<K extends string = never> = Readonly<{
   columnValueName?: K;
   charactersToIgnore?: string;
   longForm?: boolean;

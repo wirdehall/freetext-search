@@ -1,7 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useFreetextFilter } from 'freetext-search/react';
 import Table from '../components/table';
-import { FreextextFilterHookOptions } from '../../../../src/index-search.types';
 
 const steamColumnsToInclude: string[] = [
   'game_id', 'title', 'release_date', 'all_genres', 'theme', 'art_style', 
