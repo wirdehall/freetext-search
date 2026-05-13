@@ -1,11 +1,13 @@
-export const indexSearchdelimiter = '◬';
+import { FreetextFilterOptions } from "./index-search.types";
 
-interface RangeFilter {
+export const indexSearchDelimiter = '◬';
+
+type RangeFilter = Readonly<{
   lower: number;
   upper: number;
   startAnchor: boolean;
   endAnchor: boolean;
-}
+}>;
 
 const NUM_ANY = /\d+/g;
 const NUM_START = /(?<=◬)\d+/g;
@@ -48,19 +50,37 @@ const parseRangeTokens = (filterText: string): {
   return { remaining, inclusionRanges, exclusionRanges };
 };
 
+const longFormParts = { start: '@start:', end: ':@end' };
+const shortFormParts = { start: '@:', end: ':@' };
+
+const convertStartAndEndShorthands = (filterText: string, longForm: boolean, shortForm: boolean) => {
+  const conversionParts = [];
+  if(longForm) conversionParts.push(longFormParts);
+  if(shortForm) conversionParts.push(shortFormParts);
+
+  return conversionParts.reduce((acc, parts) => {
+    return acc
+      .replaceAll(`${parts.start}!"`, `!"${indexSearchDelimiter}`)
+      .replaceAll(`${parts.start}"`, `"${indexSearchDelimiter}`)
+      .replaceAll(parts.start, indexSearchDelimiter)
+      .replaceAll(`"${parts.end}`, `${indexSearchDelimiter}"`)
+      .replaceAll(parts.end, indexSearchDelimiter);
+  }, filterText);
+}
+
 export const freetextFilterByIndex = <T>(
   filterText: string,
   indexes: Readonly<{ [index: string]: T }>,
-  ignoreCharactersRegex?: RegExp
+  options?: FreetextFilterOptions,
 ) => {
+  const { ignoreCharactersRegex, longForm, shortForm } = options ?? {};
   const { remaining, inclusionRanges, exclusionRanges } = parseRangeTokens(filterText);
   const cleanedFilterText = remaining.toLowerCase().trim();
-  const filterTextCheckingForStartAndFinish = cleanedFilterText
-    .replaceAll(`@start:!"`, `!"${indexSearchdelimiter}`)
-    .replaceAll(`@start:"`, `"${indexSearchdelimiter}`)
-    .replaceAll('@start:', indexSearchdelimiter)
-    .replaceAll(`":@end`, `${indexSearchdelimiter}"`)
-    .replaceAll(':@end', indexSearchdelimiter);
+  const filterTextCheckingForStartAndFinish = convertStartAndEndShorthands(
+    cleanedFilterText, 
+    longForm ?? true, 
+    shortForm ?? false
+  );
   const filterTextCharactersRemoved = ignoreCharactersRegex
     ? filterTextCheckingForStartAndFinish.replace(ignoreCharactersRegex, '')
     : filterTextCheckingForStartAndFinish;

@@ -1,3 +1,3 @@
-export { buildIndex, getCharactersToIgnoreFunctionAndRegex } from "./index-builder.helper";
-export { freetextFilterByIndex, indexSearchdelimiter } from "./index-search.helper";
-export { Primitive, RowDef, Options, Index } from './index-search.types';
+export { buildIndex, getCharactersToIgnoreFunctionAndRegex } from "./index-builder";
+export { freetextFilterByIndex, indexSearchDelimiter } from "./index-search";
+export type { Primitive, RowDef, Index, FreetextFilterOptions } from './index-search.types';

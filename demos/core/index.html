@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>freetext-search | core demo</title>
+  </head>
+  <body>
+    <div class="content">
+      <h1>freetext-search — core demo</h1>
+      <div class="hints">
+        <strong>Cheat sheet:</strong>
+        <table>
+          <thead>
+            <th>Query syntax</th>
+            <th>Description</th>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>static</code></td>
+              <td>Free text search across all columns and rows.</td>
+            </tr>
+            <tr>
+              <td><code>static multi</code></td>
+              <td>Both words must exist in the row for it to show, space acts as AND.</td>
+            </tr>
+            <tr>
+              <td><code>!java</code></td>
+              <td>Exclude rows containing the word java.</td>
+            </tr>
+            <tr>
+              <td><code>"Lisp, ML"</code></td>
+              <td>Match phrase. Without quotation marks space acts as and across the entire row.</td>
+            </tr>
+            <tr>
+              <td><code>[1985:1995]</code></td>
+              <td>Match numeric range.</td>
+            </tr>
+            <tr>
+              <td><code>@start:ml</code></td>
+              <td>Column start with word</td>
+            </tr>
+            <tr>
+              <td><code>lisp:@end</code></td>
+              <td>Column ends with word</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p>Try combining different syntax, for example: <code>!@start:"Lisp, ML"</code></p>
+      </div>
+      <input id="search" type="text" placeholder="Search languages…" autofocus />
+      <div id="count" class="count"></div>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Year</th>
+            <th>Paradigm</th>
+            <th>Typing</th>
+            <th>Influences</th>
+          </tr>
+        </thead>
+        <tbody id="results"></tbody>
+      </table>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

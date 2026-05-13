@@ -1,0 +1,4 @@
+node_modules/
+dist/
+demos/react/public/*
+CLAUDE.md

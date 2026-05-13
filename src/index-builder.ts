@@ -1,21 +1,14 @@
-import { indexSearchdelimiter } from "./index-search.helper";
+import { indexSearchDelimiter } from "./index-search";
 import { Primitive, RowDef, WriteableIndex } from "./index-search.types";
 
 export const buildIndex = <K extends string = never, T extends RowDef<K> = RowDef<K>>(
   rows: ReadonlyArray<T>,
   columnValueName?: K,
-  charactersToIgnoreObject?: {
-    ignoreCharactersFunction: (colString: string) => string;
-    ignoreCharactersRegex?: RegExp;
-  },
+  ignoreCharactersFunction?: (colString: string) => string,
 ) => {
-  const { ignoreCharactersFunction, ignoreCharactersRegex } = charactersToIgnoreObject
-    ?? {
-      ignoreCharactersFunction: (colString: string) => colString ,
-      ignoreCharactersRegex: undefined
-    };
+  const ignoreCharactersFunctionEnsured = ignoreCharactersFunction ?? ((colString: string) => colString);
   const index = rows.reduce((acc:  WriteableIndex<T>, row) => {
-    const index: string = indexSearchdelimiter + Object.values(row).map((val) => {
+    const index: string = indexSearchDelimiter + Object.values(row).map((val) => {
       const value: Primitive = columnValueName !== undefined
         ? (val !== null && columnValueName !== undefined && typeof val === 'object' && val[columnValueName] !== undefined
           ? val[columnValueName]
@@ -24,8 +17,8 @@ export const buildIndex = <K extends string = never, T extends RowDef<K> = RowDe
 
       const stringValue = (value || '') + ''; // convert null-values and numbers to string.
 
-      return ignoreCharactersFunction(stringValue.toLowerCase());
-    }).join(indexSearchdelimiter) + indexSearchdelimiter;
+      return ignoreCharactersFunctionEnsured(stringValue.toLowerCase());
+    }).join(indexSearchDelimiter) + indexSearchDelimiter;
     acc[index] = row;
     return acc;
   }, {});
@@ -33,11 +26,11 @@ export const buildIndex = <K extends string = never, T extends RowDef<K> = RowDe
   return index;
 }
 
-export const getCharactersToIgnoreFunctionAndRegex = (charactersToIgnore?: string | string[]) => {
+export const getCharactersToIgnoreFunctionAndRegex = (charactersToIgnore?: string) => {
   if(charactersToIgnore === undefined) {
     return { ignoreCharactersFunction: (colString: string) => colString, ignoreCharactersRegex: undefined };
-  } else if(Array.isArray(charactersToIgnore)) {
-    const regex = new RegExp("(" + charactersToIgnore.join('|') + ")", "g");
+  } else if(charactersToIgnore.includes('|')) {
+    const regex = new RegExp("(" + charactersToIgnore + ")", "g");
     return {
       ignoreCharactersFunction: (colString: string) => colString.replace(regex, ''),
       ignoreCharactersRegex: regex
