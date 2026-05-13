@@ -9,6 +9,7 @@
     "type": "git",
     "url": ""
   },
+  "sideEffects": false,
   "files": ["dist"],
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
