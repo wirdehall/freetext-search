@@ -85,7 +85,7 @@ export default function BigDataset({ dataset }: Params) {
   }, [dataset]);
 
   performance.mark('Filter start');
-  const { currentRows, filterText, setFilterText } = useFreetextFilter(rows, undefined, { shortForm: true, charactersToIgnore: '-|:' });
+  const { currentRows, filterText, setFilterText } = useFreetextFilter(rows, undefined, { rangeIndex: true, charactersToIgnore: '-|:' });
   performance.mark('Filter end');
   console.log(performance.measure('Filter', 'Filter start', 'Filter end'));
 

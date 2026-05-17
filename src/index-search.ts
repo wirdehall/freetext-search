@@ -1,28 +1,15 @@
-import { FreetextFilterOptions } from "./index-search.types";
+import { FreetextFilterOptions, Index } from "./index-search.types";
 
 export const indexSearchDelimiter = '◬';
 
 type RangeFilter = Readonly<{
   lower: number;
   upper: number;
-  startAnchor: boolean;
-  endAnchor: boolean;
+  prefix: string | null;
+  suffix: string | null;
 }>;
 
-const NUM_ANY = /\d+/g;
-const NUM_START = /(?<=◬)\d+/g;
-const NUM_END = /\d+(?=◬)/g;
-const NUM_BOTH = /(?<=◬)\d+(?=◬)/g;
-
-const extractNumbers = (str: string, startAnchor: boolean, endAnchor: boolean): number[] => {
-  const pattern = startAnchor && endAnchor ? NUM_BOTH
-    : startAnchor ? NUM_START
-    : endAnchor ? NUM_END
-    : NUM_ANY;
-  return (str.match(pattern) ?? []).map(Number);
-};
-
-const parseRangeTokens = (filterText: string, longForm: boolean, shortForm: boolean): {
+const parseRangeTokens = (filterText: string): {
   remaining: string;
   inclusionRanges: RangeFilter[];
   exclusionRanges: RangeFilter[];
@@ -30,18 +17,12 @@ const parseRangeTokens = (filterText: string, longForm: boolean, shortForm: bool
   const inclusionRanges: RangeFilter[] = [];
   const exclusionRanges: RangeFilter[] = [];
 
-  const startParts: string[] = [];
-  if (longForm) startParts.push('@start:');
-  if (shortForm) startParts.push('@:');
-  const endParts: string[] = [];
-  if (longForm) endParts.push(':@end');
-  if (shortForm) endParts.push(':@');
+  const pattern = new RegExp(
+    `(!?)(${indexSearchDelimiter}?[^\\s0-9${indexSearchDelimiter}]*)(\\[.*?\\])(?=([^\\s0-9${indexSearchDelimiter}]*${indexSearchDelimiter}?))`, 
+    'g'
+  );
 
-  const startGroup = startParts.length > 0 ? `(${startParts.join('|')})?` : '()';
-  const endGroup = endParts.length > 0 ? `(${endParts.join('|')})?` : '()';
-  const pattern = new RegExp(`(!?)${startGroup}(\\[.*?\\])${endGroup}`, 'g');
-
-  const remaining = filterText.replace(pattern, (fullMatch, bang, startPrefix, bracket, endSuffix) => {
+  const remaining = filterText.replace(pattern, (fullMatch, bang, prefix, bracket, suffix) => {
     const inner = bracket.slice(1, -1);
     const parts = inner.split(':');
     if (parts.length !== 2) return fullMatch;
@@ -51,8 +32,8 @@ const parseRangeTokens = (filterText: string, longForm: boolean, shortForm: bool
     const filter: RangeFilter = {
       lower,
       upper,
-      startAnchor: !!startPrefix,
-      endAnchor: !!endSuffix,
+      prefix: prefix > '' ? prefix : null,
+      suffix: suffix > '' ? suffix : null,
     };
     (bang === '!' ? exclusionRanges : inclusionRanges).push(filter);
     return '';
@@ -81,20 +62,25 @@ const convertStartAndEndShorthands = (filterText: string, longForm: boolean, sho
 
 export const freetextFilterByIndex = <T>(
   filterText: string,
-  indexes: Readonly<{ [index: string]: T }>,
+  indexes: Index<T>,
   options?: FreetextFilterOptions,
 ) => {
-  const { ignoreCharactersRegex, longForm, shortForm } = options ?? {};
-  const { remaining, inclusionRanges, exclusionRanges } = parseRangeTokens(filterText, longForm ?? true, shortForm ?? false);
-  const cleanedFilterText = remaining.toLowerCase().trim();
+  const { ignoreCharactersRegex, longForm, shortForm, rangeIndex } = options ?? {};
+  const cleanedFilterText = filterText.toLowerCase().trim();
   const filterTextCheckingForStartAndFinish = convertStartAndEndShorthands(
     cleanedFilterText, 
     longForm ?? true, 
-    shortForm ?? false
+    shortForm ?? true
   );
+
+  const { remaining, inclusionRanges, exclusionRanges } = rangeIndex
+    ? parseRangeTokens(filterTextCheckingForStartAndFinish)
+    : { remaining: filterTextCheckingForStartAndFinish, inclusionRanges: [], exclusionRanges: [] };
+
   const filterTextCharactersRemoved = ignoreCharactersRegex
-    ? filterTextCheckingForStartAndFinish.replace(ignoreCharactersRegex, '')
-    : filterTextCheckingForStartAndFinish;
+    ? remaining.replace(ignoreCharactersRegex, '')
+    : remaining;
+
   // Find matches like "match whole expression" even if there are spaces.
   const sentencesNotToMatch = [ ...filterTextCharactersRemoved.matchAll(/!"(.*?)"/g) ].map(match => match[0]);
 
@@ -133,22 +119,30 @@ export const freetextFilterByIndex = <T>(
     return acc.filter((index) => !index.includes(filterString));
   }, filteredIndexesForMatches);
 
-  const rangeFiltered = (inclusionRanges.length === 0 && exclusionRanges.length === 0)
+  const rangeFiltered = ((inclusionRanges.length === 0 && exclusionRanges.length === 0) || !rangeIndex)
     ? filteredIndexes
     : filteredIndexes.filter((index) => {
-      for (const { lower, upper, startAnchor, endAnchor } of inclusionRanges) {
-        const nums = extractNumbers(index, startAnchor, endAnchor);
-        if (!nums.some(n => n >= lower && n <= upper)) return false;
+      for (const { lower, upper, prefix, suffix } of inclusionRanges) {
+        const hasMatch = indexes[index].rangeIndex!.some((rangeIndex) => 
+          rangeIndex.number >= lower && rangeIndex.number <= upper && 
+          (prefix == null ? true : rangeIndex.prefix?.endsWith(prefix)) && 
+          (suffix == null ? true : rangeIndex.suffix?.startsWith(suffix))
+        );
+        if(!hasMatch) return false;
       }
-      for (const { lower, upper, startAnchor, endAnchor } of exclusionRanges) {
-        const nums = extractNumbers(index, startAnchor, endAnchor);
-        if (nums.some(n => n >= lower && n <= upper)) return false;
+      for (const { lower, upper, prefix, suffix } of exclusionRanges) {
+        const hasMatch = indexes[index].rangeIndex!.some((rangeIndex) => 
+          rangeIndex.number >= lower && rangeIndex.number <= upper && 
+          (prefix == null ? true : rangeIndex.prefix?.endsWith(prefix)) && 
+          (suffix == null ? true : rangeIndex.suffix?.startsWith(suffix))
+        );
+        if(hasMatch) return false;
       }
       return true;
     });
 
   return rangeFiltered.reduce((acc: T[], index) => {
-    acc.push(indexes[index]);
+    acc.push(indexes[index].row);
     return acc;
   }, []);
 };

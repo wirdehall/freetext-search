@@ -1,13 +1,20 @@
 import { indexSearchDelimiter } from "./index-search";
-import { Primitive, RowDef, WriteableIndex } from "./index-search.types";
+import { Primitive, RangeIndex, RowDef, WriteableIndex } from "./index-search.types";
+
+// The regex: /(◬?[^\s0-9◬]*)([0-9]+)(?=([^\s0-9◬]*◬?))/g
+const rangeRegex = RegExp(
+  `(${indexSearchDelimiter}?[^\\s0-9${indexSearchDelimiter}]*)([0-9]+)(?=([^\\s0-9${indexSearchDelimiter}]*${indexSearchDelimiter}?))`, 
+  'g'
+);
 
 export const buildIndex = <K extends string = never, T extends RowDef<K> = RowDef<K>>(
   rows: ReadonlyArray<T>,
   columnValueName?: K,
+  rangeSearch?: boolean,
   ignoreCharactersFunction?: (colString: string) => string,
 ) => {
   const ignoreCharactersFunctionEnsured = ignoreCharactersFunction ?? ((colString: string) => colString);
-  const index = rows.reduce((acc:  WriteableIndex<T>, row) => {
+  const index = rows.reduce((acc: WriteableIndex<T>, row) => {
     const index: string = indexSearchDelimiter + Object.values(row).map((val) => {
       const value: Primitive = columnValueName !== undefined
         ? (val !== null && columnValueName !== undefined && typeof val === 'object' && val[columnValueName] !== undefined
@@ -19,7 +26,21 @@ export const buildIndex = <K extends string = never, T extends RowDef<K> = RowDe
 
       return ignoreCharactersFunctionEnsured(stringValue.toLowerCase());
     }).join(indexSearchDelimiter) + indexSearchDelimiter;
-    acc[index] = row;
+
+    let rangeIndex: RangeIndex | undefined = undefined;
+    if(rangeSearch) {
+      const matches = [ ...index.matchAll(rangeRegex) ];
+
+      rangeIndex = matches.map(match => ({ 
+        prefix: match[1] > '' ? match[1] : null,
+        number: parseFloat(match[2]),
+        suffix: match[3] > '' ? match[3] : null,
+      }))
+    }
+
+
+    
+    acc[index] = { row, rangeIndex };
     return acc;
   }, {});
 
