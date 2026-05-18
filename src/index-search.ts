@@ -8,6 +8,11 @@ type RangeFilter = Readonly<{
   regex: RegExp;
 }>;
 
+type PhraseRangeFilter = Readonly<{
+  regex: RegExp;
+  groups: ReadonlyArray<{ lower: number; upper: number }>;
+}>;
+
 const parseRangeTokens = (filterText: string): {
   remaining: string;
   inclusionRanges: RangeFilter[];
@@ -17,7 +22,7 @@ const parseRangeTokens = (filterText: string): {
   const exclusionRanges: RangeFilter[] = [];
 
   const pattern = new RegExp(
-    `(!?)(${indexSearchDelimiter}?[^\\s0-9${indexSearchDelimiter}]*)(\\[.*?\\])(?=([^\\s0-9${indexSearchDelimiter}]*${indexSearchDelimiter}?))`, 
+    `(!?)(${indexSearchDelimiter}?[^\\s0-9${indexSearchDelimiter}]*)(\\[.*?\\])(?=([^\\s0-9${indexSearchDelimiter}]*${indexSearchDelimiter}?))`,
     'g'
   );
 
@@ -39,6 +44,42 @@ const parseRangeTokens = (filterText: string): {
 
   return { remaining, inclusionRanges, exclusionRanges };
 };
+
+const parsePhraseWithRanges = (
+  phraseContent: string,
+  ignoreCharactersRegex?: RegExp,
+): PhraseRangeFilter | null => {
+  const rangePattern = /(\[.*?\])/g;
+  const groups: Array<{ lower: number; upper: number }> = [];
+  const PLACEHOLDER = '\x00';
+
+  const withPlaceholders = phraseContent.replace(rangePattern, (fullMatch, bracket) => {
+    const inner = bracket.slice(1, -1);
+    const parts = inner.split(':');
+    if (parts.length !== 2) return fullMatch;
+    const lower = Number(parts[0].replace(/(\d)-/g, '$1'));
+    const upper = Number(parts[1].replace(/(\d)-/g, '$1'));
+    if (isNaN(lower) || isNaN(upper)) return fullMatch;
+    groups.push({ lower, upper });
+    return PLACEHOLDER;
+  });
+
+  if (groups.length === 0) return null;
+
+  const stripped = ignoreCharactersRegex
+    ? withPlaceholders.replace(ignoreCharactersRegex, '')
+    : withPlaceholders;
+
+  const regexStr = stripped
+    .split(PLACEHOLDER)
+    .map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('([0-9]+)');
+
+  return { regex: new RegExp(regexStr, 'g'), groups };
+};
+
+const applyIgnoreOutsideBrackets = (text: string, regex: RegExp): string =>
+  text.split(/(\[[^\]]*\])/).map((part, i) => i % 2 === 0 ? part.replace(regex, '') : part).join('');
 
 const longFormParts = { start: '@start:', end: ':@end' };
 const shortFormParts = { start: '@:', end: ':@' };
@@ -71,33 +112,46 @@ export const freetextFilterByIndex = <T>(
     shortForm ?? true
   );
 
-  const { remaining, inclusionRanges, exclusionRanges } = parseRangeTokens(filterTextCheckingForStartAndFinish);
-
   const filterTextCharactersRemoved = ignoreCharactersRegex
-    ? remaining.replace(ignoreCharactersRegex, '')
-    : remaining;
+    ? applyIgnoreOutsideBrackets(filterTextCheckingForStartAndFinish, ignoreCharactersRegex)
+    : filterTextCheckingForStartAndFinish;
+
+  const plainPhrasesNotToMatch: string[] = [];
+  const phraseRangeExclusionFilters: PhraseRangeFilter[] = [];
 
   // Find matches like "match whole expression" even if there are spaces.
-  const sentencesNotToMatch = [ ...filterTextCharactersRemoved.matchAll(/!"(.*?)"/g) ].map(match => match[0]);
-
-  // Remove matches from filter text.
-  const filterTextWithoutSentencesNotToMatch = sentencesNotToMatch.reduce((acc, match) => {
-    return acc.replace(match, '');
+  const filterTextWithoutSentencesNotToMatch = [ ...filterTextCharactersRemoved.matchAll(/!"(.*?)"/g) ].reduce((acc, match) => {
+    const phraseRange = parsePhraseWithRanges(match[1], ignoreCharactersRegex);
+    if (phraseRange) {
+      phraseRangeExclusionFilters.push(phraseRange);
+    } else {
+      plainPhrasesNotToMatch.push(match[0]);
+    }
+    return acc.replace(match[0], '');
   }, filterTextCharactersRemoved).replace(/\s+/g, ' ').trim();
 
+  const plainPhrasesToMatch: string[] = [];
+  const phraseRangeFilters: PhraseRangeFilter[] = [];
+
   // Find matches like "match whole expression" even if there are spaces.
-  const sentencesToMatch = [ ...filterTextWithoutSentencesNotToMatch.matchAll(/"(.*?)"/g) ].map(match => match[0]);
-  // Remove matches from filter text.
-  const filterTextWithoutMatches = sentencesToMatch.reduce((acc, match) => {
-    return acc.replace(match, '');
+  const filterTextWithoutMatches = [ ...filterTextWithoutSentencesNotToMatch.matchAll(/"(.*?)"/g) ].reduce((acc, match) => {
+    const phraseRange = parsePhraseWithRanges(match[1], ignoreCharactersRegex);
+    if (phraseRange) {
+      phraseRangeFilters.push(phraseRange);
+    } else {
+      plainPhrasesToMatch.push(match[0]);
+    }
+    return acc.replace(match[0], '');
   }, filterTextWithoutSentencesNotToMatch).replace(/\s+/g, ' ').trim();
 
-  const words = filterTextWithoutMatches.split(' ').filter(text => text.length > 0);
+  const { remaining: filterTextWithoutRanges, inclusionRanges, exclusionRanges } = parseRangeTokens(filterTextWithoutMatches);
+
+  const words = filterTextWithoutRanges.split(' ').filter(text => text.length > 0);
   const wordsNotToMatch = words.filter(text => text.startsWith('!'));
   const wordsToMatch = words.filter(text => !text.startsWith('!'));
 
   const filterStrings = [
-    ...sentencesToMatch.map(text => text.replace(/"/g, '')).filter(text => text.length > 0),
+    ...plainPhrasesToMatch.map(text => text.replace(/"/g, '')).filter(text => text.length > 0),
     ...wordsToMatch,
   ];
 
@@ -105,19 +159,43 @@ export const freetextFilterByIndex = <T>(
     return acc.filter((index) => index.includes(filterString));
   }, Object.keys(indexes));
 
+  const filteredWithPhraseRanges = phraseRangeFilters.reduce((acc, { regex, groups }) => {
+    return acc.filter(index => {
+      const matches = [...index.matchAll(regex)];
+      return matches.some(match =>
+        groups.every(({ lower, upper }, i) => {
+          const n = parseInt(match[i + 1]);
+          return n >= lower && n <= upper;
+        })
+      );
+    });
+  }, filteredIndexesForMatches);
+
   // Filter away all texts not to match after we filter for what we want to match because finding matches is faster than filtering away things not to match.
   const notToMatchTexts = [
-    ...sentencesNotToMatch.map(text => text.replace('!', '').replace(/"/g, '')).filter(text => text.length > 0),
+    ...plainPhrasesNotToMatch.map(text => text.replace('!', '').replace(/"/g, '')).filter(text => text.length > 0),
     ...wordsNotToMatch.map(word => word.replace('!', '')),
   ];
 
   const filteredIndexes = notToMatchTexts.reduce((acc, filterString) => {
     return acc.filter((index) => !index.includes(filterString));
-  }, filteredIndexesForMatches);
+  }, filteredWithPhraseRanges);
+
+  const filteredWithNegatedPhraseRanges = phraseRangeExclusionFilters.reduce((acc, { regex, groups }) => {
+    return acc.filter(index => {
+      const matches = [...index.matchAll(regex)];
+      return !matches.some(match =>
+        groups.every(({ lower, upper }, i) => {
+          const n = parseInt(match[i + 1]);
+          return n >= lower && n <= upper;
+        })
+      );
+    });
+  }, filteredIndexes);
 
   const rangeFiltered = (inclusionRanges.length === 0 && exclusionRanges.length === 0)
-    ? filteredIndexes
-    : filteredIndexes.filter((index) => {
+    ? filteredWithNegatedPhraseRanges
+    : filteredWithNegatedPhraseRanges.filter((index) => {
       for (const { lower, upper, regex } of inclusionRanges) {
         const matches = [ ...index.matchAll(regex) ];
         const inRange = matches.some(match => {
