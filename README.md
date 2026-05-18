@@ -86,6 +86,7 @@ The hook rebuilds the index when `languages` changes and recomputes `currentRows
 | `[1990:2000]` | Rows containing a number between 1990 and 2000 (inclusive) |
 | `![1990:2000]` | Rows that have no number in that range |
 | `R[15:18]` | Rows containing `R15`, `R16`, `R17`, or `R18` (range as part of a word; `R 16` does not match) |
+| `"Season [2:4]"` | Rows where the word "Season" is immediately followed by a number in [2:4] (range scoped to phrase position; `Season 5` does not match) |
 | `@start:ml` | Rows where a field starts with "ml" |
 | `@:ml` | Same as `@start:ml` (short-form) |
 | `ml:@end` | Rows where a field ends with "ml" |
@@ -95,8 +96,6 @@ The hook rebuilds the index when `languages` changes and recomputes `currentRows
 Syntax can be combined freely. For example, `functional !@start:"Lisp, ML"` returns rows containing "functional" that do not have a field starting with the exact phrase "Lisp, ML".
 
 All matching is case-insensitive.
-
-> Ranges inside exact phrase quotes are not supported. The exact phrase `"Season [2:4]"` will be treat as if you had written `"Season " [2:4]`.
 
 ### Filtering dates and times
 
@@ -116,7 +115,7 @@ const index = buildIndex(rows, undefined, ignoreCharactersFunction);
 const results = freetextFilterByIndex('[20220101:20221231]', index, { ignoreCharactersRegex });
 ```
 
-To also handle time strings like `23:32:10`, add `':'` to the ignore list using `'-|:'`. The value `23:32:10` is then indexed as `233210`, and you can match against it with `[230000:240000]`.
+To also handle time strings like `23:32:10`, add `':'` to the ignore list using `'-|:'`. The value `23:32:10` is then indexed as `233210`, and you can match against it with `[230000:240000]`. The `:` inside range brackets (`[lo:hi]`) is never stripped, so range syntax continues to work correctly even when `':'` is in the ignore list.
 
 ## API
 
