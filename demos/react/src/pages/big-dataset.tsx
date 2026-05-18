@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useFreetextFilter } from 'freetext-search/react';
 import Table from '../components/table';
 
@@ -52,6 +52,7 @@ function parseCsv(text: string): Record<string, string>[] {
 type Params = { dataset: 'dota' | 'steam'};
 
 export default function BigDataset({ dataset }: Params) {
+  const debug = useMemo(() => window.location.pathname.slice(1).split('/')[1], []);
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [columnsTranslation, setColumnsTranslation] = useState<Record<string, string>>({});
@@ -85,7 +86,7 @@ export default function BigDataset({ dataset }: Params) {
   }, [dataset]);
 
   performance.mark('Filter start');
-  const { currentRows, filterText, setFilterText } = useFreetextFilter(rows, undefined, { rangeIndex: true, charactersToIgnore: '-|:' });
+  const { currentRows, filterText, setFilterText } = useFreetextFilter(rows, undefined, { charactersToIgnore: '-|:' });
   performance.mark('Filter end');
   console.log(performance.measure('Filter', 'Filter start', 'Filter end'));
 
@@ -108,6 +109,11 @@ export default function BigDataset({ dataset }: Params) {
   return (
     <div className="app">
       <h1>freetext-search — games dataset</h1>
+      { debug && 
+        <div className="sliding-rect-wrapper">
+          <div className="sliding-rect" />
+        </div>
+      }
       <input
         className="search-input"
         value={filterText}

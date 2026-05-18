@@ -5,8 +5,7 @@ export const indexSearchDelimiter = '◬';
 type RangeFilter = Readonly<{
   lower: number;
   upper: number;
-  prefix: string | null;
-  suffix: string | null;
+  regex: RegExp;
 }>;
 
 const parseRangeTokens = (filterText: string): {
@@ -32,8 +31,7 @@ const parseRangeTokens = (filterText: string): {
     const filter: RangeFilter = {
       lower,
       upper,
-      prefix: prefix > '' ? prefix : null,
-      suffix: suffix > '' ? suffix : null,
+      regex: RegExp(`${prefix}([0-9]+)${suffix}`, 'g'),
     };
     (bang === '!' ? exclusionRanges : inclusionRanges).push(filter);
     return '';
@@ -65,7 +63,7 @@ export const freetextFilterByIndex = <T>(
   indexes: Index<T>,
   options?: FreetextFilterOptions,
 ) => {
-  const { ignoreCharactersRegex, longForm, shortForm, rangeIndex } = options ?? {};
+  const { ignoreCharactersRegex, longForm, shortForm } = options ?? {};
   const cleanedFilterText = filterText.toLowerCase().trim();
   const filterTextCheckingForStartAndFinish = convertStartAndEndShorthands(
     cleanedFilterText, 
@@ -73,9 +71,7 @@ export const freetextFilterByIndex = <T>(
     shortForm ?? true
   );
 
-  const { remaining, inclusionRanges, exclusionRanges } = rangeIndex
-    ? parseRangeTokens(filterTextCheckingForStartAndFinish)
-    : { remaining: filterTextCheckingForStartAndFinish, inclusionRanges: [], exclusionRanges: [] };
+  const { remaining, inclusionRanges, exclusionRanges } = parseRangeTokens(filterTextCheckingForStartAndFinish);
 
   const filterTextCharactersRemoved = ignoreCharactersRegex
     ? remaining.replace(ignoreCharactersRegex, '')
@@ -119,30 +115,31 @@ export const freetextFilterByIndex = <T>(
     return acc.filter((index) => !index.includes(filterString));
   }, filteredIndexesForMatches);
 
-  const rangeFiltered = ((inclusionRanges.length === 0 && exclusionRanges.length === 0) || !rangeIndex)
+  const rangeFiltered = (inclusionRanges.length === 0 && exclusionRanges.length === 0)
     ? filteredIndexes
     : filteredIndexes.filter((index) => {
-      for (const { lower, upper, prefix, suffix } of inclusionRanges) {
-        const hasMatch = indexes[index].rangeIndex!.some((rangeIndex) => 
-          rangeIndex.number >= lower && rangeIndex.number <= upper && 
-          (prefix == null ? true : rangeIndex.prefix?.endsWith(prefix)) && 
-          (suffix == null ? true : rangeIndex.suffix?.startsWith(suffix))
-        );
-        if(!hasMatch) return false;
+      for (const { lower, upper, regex } of inclusionRanges) {
+        const matches = [ ...index.matchAll(regex) ];
+        const inRange = matches.some(match => {
+          const number = parseInt(match[1]);
+          return number >= lower && number <= upper;
+        })
+
+        if(!inRange) return false;
       }
-      for (const { lower, upper, prefix, suffix } of exclusionRanges) {
-        const hasMatch = indexes[index].rangeIndex!.some((rangeIndex) => 
-          rangeIndex.number >= lower && rangeIndex.number <= upper && 
-          (prefix == null ? true : rangeIndex.prefix?.endsWith(prefix)) && 
-          (suffix == null ? true : rangeIndex.suffix?.startsWith(suffix))
-        );
-        if(hasMatch) return false;
+      for (const { lower, upper, regex } of exclusionRanges) {
+        const matches = [ ...index.matchAll(regex) ];
+        const inRange = matches.some(match => {
+          const number = parseInt(match[1]);
+          return number >= lower && number <= upper;
+        });
+        if(inRange) return false;
       }
       return true;
     });
 
   return rangeFiltered.reduce((acc: T[], index) => {
-    acc.push(indexes[index].row);
+    acc.push(indexes[index]);
     return acc;
   }, []);
 };

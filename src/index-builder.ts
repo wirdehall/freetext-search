@@ -1,16 +1,9 @@
 import { indexSearchDelimiter } from "./index-search";
-import { Primitive, RangeIndex, RowDef, WriteableIndex } from "./index-search.types";
-
-// The regex: /(◬?[^\s0-9◬]*)([0-9]+)(?=([^\s0-9◬]*◬?))/g
-const rangeRegex = RegExp(
-  `(${indexSearchDelimiter}?[^\\s0-9${indexSearchDelimiter}]*)([0-9]+)(?=([^\\s0-9${indexSearchDelimiter}]*${indexSearchDelimiter}?))`, 
-  'g'
-);
+import { Primitive, RowDef, WriteableIndex } from "./index-search.types";
 
 export const buildIndex = <K extends string = never, T extends RowDef<K> = RowDef<K>>(
   rows: ReadonlyArray<T>,
   columnValueName?: K,
-  rangeSearch?: boolean,
   ignoreCharactersFunction?: (colString: string) => string,
 ) => {
   const ignoreCharactersFunctionEnsured = ignoreCharactersFunction ?? ((colString: string) => colString);
@@ -27,20 +20,7 @@ export const buildIndex = <K extends string = never, T extends RowDef<K> = RowDe
       return ignoreCharactersFunctionEnsured(stringValue.toLowerCase());
     }).join(indexSearchDelimiter) + indexSearchDelimiter;
 
-    let rangeIndex: RangeIndex | undefined = undefined;
-    if(rangeSearch) {
-      const matches = [ ...index.matchAll(rangeRegex) ];
-
-      rangeIndex = matches.map(match => ({ 
-        prefix: match[1] > '' ? match[1] : null,
-        number: parseFloat(match[2]),
-        suffix: match[3] > '' ? match[3] : null,
-      }))
-    }
-
-
-    
-    acc[index] = { row, rangeIndex };
+    acc[index] = row;
     return acc;
   }, {});
 

@@ -20,16 +20,15 @@ export const useFreetextFilter = <K extends string = never, T extends RowDef<K> 
   }, [options?.charactersToIgnore]);
 
   const index: Index<T> = useMemo(() => {
-    return buildIndex(rows, options?.columnValueName, options?.rangeIndex, ignoreCharactersFunction);
+    return buildIndex(rows, options?.columnValueName, ignoreCharactersFunction);
   }, [rows, options?.columnValueName, ignoreCharactersFunction]);
 
   const currentRows = useMemo(() => {
     if(filterText === '') {
-      return Object.values(index).map(indexRow => indexRow.row);
+      return Object.values(index);
     }
 
     return freetextFilterByIndex(filterText, index, {
-      rangeIndex: options?.rangeIndex,
       ignoreCharactersRegex,
       longForm: options?.longForm,
       shortForm: options?.shortForm

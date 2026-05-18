@@ -131,6 +131,31 @@ table tr.pending td { color: var(--color-text-muted); }
   color: var(--color-accent);
 }
 
+@keyframes slide-across {
+  from { left: 0; }
+  to   { left: calc(100% - 40px); }
+}
+
+.sliding-rect-wrapper {
+  position: relative;
+  width: 100%;
+  height: 20px;
+  margin: 1rem 0;
+  overflow: hidden;
+}
+
+.sliding-rect {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40px;
+  height: 20px;
+  background: var(--color-accent);
+  border-radius: 4px;
+  box-shadow: 0 0 8px var(--color-accent-glow);
+  animation: slide-across 2s ease-in-out infinite alternate;
+}
+
 .status-message {
   text-align: center;
   margin-top: 4rem;

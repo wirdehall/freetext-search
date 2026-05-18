@@ -9,7 +9,7 @@ type View = 'simple' | 'dota' | 'steam'
 const paths = ['simple', 'steam', 'dota'];
 
 function Root() {
-  const path = useMemo(() => window.location.pathname.slice(1), []);
+  const path = useMemo(() => window.location.pathname.slice(1).split('/')[0], []);
   const [view, setView] = useState<View>(paths.includes(path) ? path as View : 'simple');
   return (
     <>
