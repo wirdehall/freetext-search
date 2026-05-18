@@ -50,14 +50,15 @@
     "typescript": "^5.0.0"
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "npm run ensureNodeVersion && tsdown",
+    "ensureNodeVersion": "node -e \"const v=parseInt(process.versions.node);if(v<24)throw new Error('Node 24+ required to build, got '+v)\"",
     "prepublishOnly": "npm run build",
     "build:demos": "npm run build --workspaces --if-present",
     "dev:demo:core": "npm run dev --workspace=demos/core",
     "dev:demo:react": "npm run dev --workspace=demos/react"
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=18"
   },
   "workspaces": [
     "demos/*"
