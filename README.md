@@ -8,7 +8,7 @@ Filtering rows on the client usually means running the same `.filter()` loop on 
 
 `freetext-search` separates two steps that are typically collapsed together: building the index and running the query. You build the index once when your data arrives, then filter against it on every keystroke. The index is a plain object, so it serializes, memoizes trivially, and can live outside a component's render cycle.
 
-Indexing 80,000+ rows takes around 100ms and happens once. Repeated filter queries against that index typically run in single-digit milliseconds. Range queries (numeric filtering) are slower, but still around 40-50ms at that scale. Actual numbers depend on hardware and data shape, but the architecture means the cost does not grow with every keystroke, in fact the first character in a filter is the slowest unless you add a range.
+Indexing 80,000+ rows takes around 100ms and happens once. Repeated filter queries against that index typically run in single-digit milliseconds. Range queries (numeric filtering) require opt-in via `rangeIndex: true` (see API). When enabled, the heavy work is done at index-build time rather than at filter time, so repeated range queries run in roughly the same single-digit milliseconds as non-range queries. The trade-off is that building the index takes around 2.5× longer when range indexing is on. Actual numbers depend on hardware and data shape.
 
 The other thing that separates it from a hand-rolled `.filter()` is the query language. Filtering rows that contain "functional" AND have a year between 1990 and 2000 is `functional [1990:2000]`. Excluding rows that contain "java" is `!java`. Matching an exact phrase is `"multi paradigm"`. You get AND logic by default, negation, phrase matching, numeric ranges, and field-position anchors, all in one input field, with no extra configuration required.
 
@@ -33,11 +33,11 @@ const languages = [
   { name: 'Python',     year: 1991, paradigm: 'multi-paradigm', typing: 'dynamic' },
 ];
 
-// Build once when data is available.
-const index = buildIndex(languages);
+// Build once when data is available. Pass true as third arg to enable range indexing.
+const index = buildIndex(languages, undefined, true);
 
 // Call on every keystroke.
-const results = freetextFilterByIndex('static [1990:2000]', index);
+const results = freetextFilterByIndex('static [1990:2000]', index, { rangeIndex: true });
 // => rows where 'typing' is 'static' AND 'year' is between 1990 and 2000
 ```
 
@@ -83,15 +83,20 @@ The hook rebuilds the index when `languages` changes and recomputes `currentRows
 | `!java` | Rows that do not contain "java" |
 | `"multi paradigm"` | Rows containing the exact phrase "multi paradigm" |
 | `!"object oriented"` | Rows that do not contain that exact phrase |
-| `[1990:2000]` | Rows containing a number between 1990 and 2000 (inclusive) |
-| `![1990:2000]` | Rows that have no number in that range |
+| `[1990:2000]` | Rows containing a number between 1990 and 2000 (inclusive) — requires `rangeIndex: true` |
+| `![1990:2000]` | Rows that have no number in that range — requires `rangeIndex: true` |
+| `R[15:18]` | Rows containing `R15`, `R16`, `R17`, or `R18` (range as part of a word; `R 16` does not match) — requires `rangeIndex: true` |
 | `@start:ml` | Rows where a field starts with "ml" |
+| `@:ml` | Same as `@start:ml` (short-form) |
 | `ml:@end` | Rows where a field ends with "ml" |
+| `ml:@` | Same as `ml:@end` (short-form) |
 | `@start:[1990:2000]:@end` | Rows where a field contains only a number in range (a field set to "1998" matches; "Year 1998" does not) |
 
 Syntax can be combined freely. For example, `functional !@start:"Lisp, ML"` returns rows containing "functional" that do not have a field starting with the exact phrase "Lisp, ML".
 
 All matching is case-insensitive.
+
+> **Range queries** are silently ignored unless `rangeIndex: true` is passed to both `buildIndex` and `freetextFilterByIndex` (or `useFreetextFilter`). There is no support for ranges inside exact phrase quotes — such as `"Season [2:4]"`. The range will be matched outside of the phrase.
 
 ### Filtering dates and times
 
@@ -105,28 +110,18 @@ import { buildIndex, freetextFilterByIndex, getCharactersToIgnoreFunctionAndRege
 const { ignoreCharactersFunction, ignoreCharactersRegex } = getCharactersToIgnoreFunctionAndRegex('-');
 // '2022-03-10' is indexed as '20220310'
 
-const index = buildIndex(rows, undefined, ignoreCharactersFunction);
+const index = buildIndex(rows, undefined, true, ignoreCharactersFunction);
 
 // Query [20220101:20221231] or [2022-01-01:2022-12-31] now works against date fields.
-const results = freetextFilterByIndex('[20220101:20221231]', index, { ignoreCharactersRegex });
+const results = freetextFilterByIndex('[20220101:20221231]', index, { rangeIndex: true, ignoreCharactersRegex });
 ```
 
 To also handle time strings like `23:32:10`, add `':'` to the ignore list using `'-|:'`. The value `23:32:10` is then indexed as `233210`, and you can match against it with `[230000:240000]`.
 
-### Short-form anchors
-
-When `shortForm: true` is passed, `@:` and `:@` work as shorthand for `@start:` and `:@end`:
-
-```ts
-freetextFilterByIndex('@:ml', index, { shortForm: true });
-// equivalent to: freetextFilterByIndex('@start:ml', index)
-```
-
-Short-form is off by default. Long-form (`@start:` / `:@end`) is always available.
 
 ## API
 
-### `buildIndex(rows, columnValueName?, ignoreCharactersFunction?)`
+### `buildIndex(rows, columnValueName?, rangeSearch?, ignoreCharactersFunction?)`
 
 Builds a search index from an array of objects.
 
@@ -134,6 +129,7 @@ Builds a search index from an array of objects.
 |---|---|---|
 | `rows` | `ReadonlyArray<T>` | The data to index |
 | `columnValueName` | `string` (optional) | If your row fields are objects rather than primitives, extract this property from each nested object for indexing |
+| `rangeSearch` | `boolean` (optional, default `false`) | Pre-compute numeric range data during indexing. Required to use range queries. Adds ~2.5× build time. |
 | `ignoreCharactersFunction` | `(str: string) => string` (optional) | Character-stripping function from `getCharactersToIgnoreFunctionAndRegex` |
 
 Returns an `Index<T>` object. Pass it to `freetextFilterByIndex` as-is.
@@ -155,9 +151,10 @@ Filters the index using a query string.
 |---|---|---|
 | `filterText` | `string` | The search query |
 | `index` | `Index<T>` | From `buildIndex` |
+| `options.rangeIndex` | `boolean` (optional, default `false`) | Enable range token parsing. Must also have `rangeSearch: true` in `buildIndex`. |
 | `options.ignoreCharactersRegex` | `RegExp` (optional) | From `getCharactersToIgnoreFunctionAndRegex` |
 | `options.longForm` | `boolean` (optional, default `true`) | Enable `@start:` / `:@end` anchors |
-| `options.shortForm` | `boolean` (optional, default `false`) | Enable `@:` / `:@` anchors |
+| `options.shortForm` | `boolean` (optional, default `true`) | Enable `@:` / `:@` anchors |
 
 Returns `T[]`.
 
@@ -178,9 +175,10 @@ Returns `{ ignoreCharactersFunction, ignoreCharactersRegex }`.
 | `rows` | `ReadonlyArray<T>` | The data to filter. A changed reference triggers a re-index. |
 | `initialFilterText` | `string` (optional) | Starting value for `filterText` (default: `''`) |
 | `options.columnValueName` | `string` (optional) | Same as `buildIndex`'s `columnValueName` |
+| `options.rangeIndex` | `boolean` (optional, default `false`) | Enable range indexing and range query parsing. Equivalent to `rangeSearch` in `buildIndex` and `rangeIndex` in `freetextFilterByIndex`. |
 | `options.charactersToIgnore` | `string` (optional) | Same as `getCharactersToIgnoreFunctionAndRegex`'s argument |
 | `options.longForm` | `boolean` (optional, default `true`) | Enable `@start:` / `:@end` |
-| `options.shortForm` | `boolean` (optional, default `false`) | Enable `@:` / `:@` |
+| `options.shortForm` | `boolean` (optional, default `true`) | Enable `@:` / `:@` |
 
 Returns `{ currentRows, filterText, setFilterText, index }`.
 
