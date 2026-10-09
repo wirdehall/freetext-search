@@ -1,6 +1,6 @@
 {
   "name": "freetext-search",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Fast, lightweight freetext search with zero external dependencies",
   "license": "MIT",
   "type": "module",
