@@ -81,6 +81,25 @@ const parsePhraseWithRanges = (
 const applyIgnoreOutsideBrackets = (text: string, regex: RegExp): string =>
   text.split(/(\[[^\]]*\])/).map((part, i) => i % 2 === 0 ? part.replace(regex, '') : part).join('');
 
+const matchesRange = (searchText: string, { lower, upper, regex }: RangeFilter): boolean => {
+  for (const match of searchText.matchAll(regex)) {
+    const number = parseInt(match[1]);
+    if (number >= lower && number <= upper) return true;
+  }
+  return false;
+};
+
+const matchesPhraseRange = (searchText: string, { regex, groups }: PhraseRangeFilter): boolean => {
+  for (const match of searchText.matchAll(regex)) {
+    const inRange = groups.every(({ lower, upper }, i) => {
+      const n = parseInt(match[i + 1]);
+      return n >= lower && n <= upper;
+    });
+    if (inRange) return true;
+  }
+  return false;
+};
+
 const longFormParts = { start: '@start:', end: ':@end' };
 const shortFormParts = { start: '@:', end: ':@' };
 
@@ -155,69 +174,27 @@ export const freetextFilterByIndex = <T>(
     ...wordsToMatch,
   ];
 
-  const filteredIndexesForMatches = filterStrings.reduce((acc, filterString) => {
-    return acc.filter((index) => index.includes(filterString));
-  }, Object.keys(indexes));
-
-  const filteredWithPhraseRanges = phraseRangeFilters.reduce((acc, { regex, groups }) => {
-    return acc.filter(index => {
-      const matches = [...index.matchAll(regex)];
-      return matches.some(match =>
-        groups.every(({ lower, upper }, i) => {
-          const n = parseInt(match[i + 1]);
-          return n >= lower && n <= upper;
-        })
-      );
-    });
-  }, filteredIndexesForMatches);
-
-  // Filter away all texts not to match after we filter for what we want to match because finding matches is faster than filtering away things not to match.
+  // Texts not to match are checked after the texts we want to match, because finding matches is faster than filtering away things not to match.
   const notToMatchTexts = [
     ...plainPhrasesNotToMatch.map(text => text.replace('!', '').replace(/"/g, '')).filter(text => text.length > 0),
     ...wordsNotToMatch.map(word => word.replace('!', '')),
   ];
 
-  const filteredIndexes = notToMatchTexts.reduce((acc, filterString) => {
-    return acc.filter((index) => !index.includes(filterString));
-  }, filteredWithPhraseRanges);
-
-  const filteredWithNegatedPhraseRanges = phraseRangeExclusionFilters.reduce((acc, { regex, groups }) => {
-    return acc.filter(index => {
-      const matches = [...index.matchAll(regex)];
-      return !matches.some(match =>
-        groups.every(({ lower, upper }, i) => {
-          const n = parseInt(match[i + 1]);
-          return n >= lower && n <= upper;
-        })
-      );
-    });
-  }, filteredIndexes);
-
-  const rangeFiltered = (inclusionRanges.length === 0 && exclusionRanges.length === 0)
-    ? filteredWithNegatedPhraseRanges
-    : filteredWithNegatedPhraseRanges.filter((index) => {
-      for (const { lower, upper, regex } of inclusionRanges) {
-        const matches = [ ...index.matchAll(regex) ];
-        const inRange = matches.some(match => {
-          const number = parseInt(match[1]);
-          return number >= lower && number <= upper;
-        })
-
-        if(!inRange) return false;
-      }
-      for (const { lower, upper, regex } of exclusionRanges) {
-        const matches = [ ...index.matchAll(regex) ];
-        const inRange = matches.some(match => {
-          const number = parseInt(match[1]);
-          return number >= lower && number <= upper;
-        });
-        if(inRange) return false;
-      }
-      return true;
-    });
-
-  return rangeFiltered.reduce((acc: T[], index) => {
-    acc.push(indexes[index]);
+  // One pass over the index. Every check bails out on the first failure, cheapest checks first.
+  return indexes.reduce((acc: T[], { index, row }) => {
+    // Words and "quoted phrases" that must all be present.
+    for (const text of filterStrings) if (!index.includes(text)) return acc;
+    // Quoted phrases containing a range, e.g. "season [30:40]", that must all match.
+    for (const filter of phraseRangeFilters) if (!matchesPhraseRange(index, filter)) return acc;
+    // Negated words and phrases, e.g. !java or !"multi paradigm", none of which may be present.
+    for (const text of notToMatchTexts) if (index.includes(text)) return acc;
+    // Negated phrases containing a range, e.g. !"season [30:40]", none of which may match.
+    for (const filter of phraseRangeExclusionFilters) if (matchesPhraseRange(index, filter)) return acc;
+    // Ranges, e.g. [1990:2000] or R[15:18], that must each contain at least one number in the row.
+    for (const filter of inclusionRanges) if (!matchesRange(index, filter)) return acc;
+    // Negated ranges, e.g. ![1990:2000], that must not contain any number in the row.
+    for (const filter of exclusionRanges) if (matchesRange(index, filter)) return acc;
+    acc.push(row);
     return acc;
   }, []);
 };

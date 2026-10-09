@@ -25,7 +25,7 @@ export const useFreetextFilter = <K extends string = never, T extends RowDef<K> 
 
   const currentRows = useMemo(() => {
     if(filterText === '') {
-      return Object.values(index);
+      return rows;
     }
 
     return freetextFilterByIndex(filterText, index, {
@@ -33,7 +33,7 @@ export const useFreetextFilter = <K extends string = never, T extends RowDef<K> 
       longForm: options?.longForm,
       shortForm: options?.shortForm
     });
-  }, [filterText, index, ignoreCharactersRegex, options?.longForm, options?.shortForm]);
+  }, [filterText, rows, index, ignoreCharactersRegex, options?.longForm, options?.shortForm]);
 
   return { currentRows, filterText, setFilterText, index };
 }

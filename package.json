@@ -62,5 +62,9 @@
   },
   "workspaces": [
     "demos/*"
-  ]
+  ],
+  "allowScripts": {
+    "esbuild@0.25.12": true,
+    "fsevents@2.3.3": true
+  }
 }

@@ -6,7 +6,7 @@ Client-side freetext filter with an index-based approach and a query syntax for 
 
 Filtering rows on the client usually means running the same `.filter()` loop on every keystroke. At a few hundred rows that is fine. At tens of thousands it is not.
 
-`freetext-search` separates two steps that are typically collapsed together: building the index and running the query. You build the index once when your data arrives, then filter against it on every keystroke. The index is a plain object, so it serializes, memoizes trivially, and can live outside a component's render cycle.
+`freetext-search` separates two steps that are typically collapsed together: building the index and running the query. You build the index once when your data arrives, then filter against it on every keystroke. The index is a plain array of `{ index, row }` objects, so it serializes, memoizes trivially, and can live outside a component's render cycle.
 
 Indexing 80,000+ rows takes around 120ms and happens once. Repeated filter queries against that index typically run in single-digit milliseconds. Range queries (numeric filtering) run around 40ms at that scale. Word-anchored ranges — such as `R[15:18]` matching `R16` — run in under 10ms. Actual numbers depend on hardware and data shape. Actual numbers depend on hardware and data shape, but the architecture means the cost does not grow with every keystroke, in fact the first character in a filter is the slowest unless you add a range.
 
@@ -129,7 +129,7 @@ Builds a search index from an array of objects.
 | `columnValueName` | `string` (optional) | If your row fields are objects rather than primitives, extract this property from each nested object for indexing |
 | `ignoreCharactersFunction` | `(str: string) => string` (optional) | Character-stripping function from `getCharactersToIgnoreFunctionAndRegex` |
 
-Returns an `Index<T>` object. Pass it to `freetextFilterByIndex` as-is.
+Returns an `Index<T>`: an array with one `{ index, row }` entry per row (`index` is the text that is searched), in the same order as `rows`. Rows with identical field values each get their own entry. Pass it to `freetextFilterByIndex` as-is, or filter, slice, sort or concatenate it first; every entry carries its own row, so the index stays valid.
 
 ```ts
 // Flat rows
@@ -152,7 +152,7 @@ Filters the index using a query string.
 | `options.longForm` | `boolean` (optional, default `true`) | Enable `@start:` / `:@end` anchors |
 | `options.shortForm` | `boolean` (optional, default `true`) | Enable `@:` / `:@` anchors |
 
-Returns `T[]`.
+Returns `T[]`, in index order.
 
 ### `getCharactersToIgnoreFunctionAndRegex(charactersToIgnore?)`
 
@@ -175,11 +175,10 @@ Returns `{ ignoreCharactersFunction, ignoreCharactersRegex }`.
 | `options.longForm` | `boolean` (optional, default `true`) | Enable `@start:` / `:@end` |
 | `options.shortForm` | `boolean` (optional, default `true`) | Enable `@:` / `:@` |
 
-Returns `{ currentRows, filterText, setFilterText, index }`.
+Returns `{ currentRows, filterText, setFilterText, index }`. While `filterText` is empty, `currentRows` is the `rows` array you passed in.
 
 ## Known limitations
 
-- Rows with identical field values produce the same index key; only one will appear in results. Rows are considered duplicates if every field value is identical.
 - The character `◬` is used internally as a field delimiter. If your data contains it, results will be incorrect.
 
 ## License

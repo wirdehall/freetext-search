@@ -1,5 +1,7 @@
-export type WriteableIndex<T> = { [index: string]: T };
-export type Index<T> = Readonly<WriteableIndex<T>>;
+// One entry per row: `index` is the lowercased, delimiter-joined text that is searched, `row` is the row it was built from.
+export type IndexEntry<T> = Readonly<{ index: string; row: T }>;
+export type WriteableIndex<T> = Array<IndexEntry<T>>;
+export type Index<T> = ReadonlyArray<IndexEntry<T>>;
 
 export type Primitive = string | number | boolean | null;
 export type RowDef<K extends string = never> = Readonly<Record<string,
